@@ -3,6 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'screens/home_screen.dart';
 
 void main() {
+  // PENTING: Memastikan binding Flutter terinisialisasi sebelum menjalankan app.
+  // Ini seringkali memperbaiki error "LateInitializationError" pada plugin
+  // yang membutuhkan akses platform channel (seperti FilePicker) saat startup.
+  WidgetsFlutterBinding.ensureInitialized();
+  
   runApp(const MyApp());
 }
 

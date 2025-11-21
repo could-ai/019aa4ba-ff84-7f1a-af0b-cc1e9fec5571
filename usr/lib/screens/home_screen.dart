@@ -20,6 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Membersihkan cache file picker jika perlu (opsional, tapi membantu stabilitas)
+      // await FilePicker.platform.clearTemporaryFiles(); 
+
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['ehi', 'hc', 'txt', 'json', 'xml', 'conf'],
@@ -32,18 +35,22 @@ class _HomeScreenState extends State<HomeScreen> {
         String fileName = file.name;
         String? content;
         
-        // Prioritaskan bytes jika tersedia (Web atau Mobile dengan withData: true)
-        if (file.bytes != null) {
-          content = utf8.decode(file.bytes!, allowMalformed: true);
-        } else if (file.path != null && !kIsWeb) {
-          // Fallback untuk Mobile/Desktop jika bytes null
-          final ioFile = File(file.path!);
-          // BACA SEBAGAI BYTES DULU untuk menghindari error encoding pada file binary
-          final bytes = await ioFile.readAsBytes();
-          content = utf8.decode(bytes, allowMalformed: true);
+        try {
+          // Prioritaskan bytes jika tersedia (Web atau Mobile dengan withData: true)
+          if (file.bytes != null) {
+            content = utf8.decode(file.bytes!, allowMalformed: true);
+          } else if (file.path != null && !kIsWeb) {
+            // Fallback untuk Mobile/Desktop jika bytes null
+            final ioFile = File(file.path!);
+            // BACA SEBAGAI BYTES DULU untuk menghindari error encoding pada file binary
+            final bytes = await ioFile.readAsBytes();
+            content = utf8.decode(bytes, allowMalformed: true);
+          }
+        } catch (e) {
+          throw Exception("Gagal membaca file: $e. Pastikan file tidak corrupt.");
         }
 
-        if (content != null) {
+        if (content != null && content.isNotEmpty) {
           // Analisa konten
           final parsedData = FileParser.analyzeContent(fileName, content);
           
@@ -59,21 +66,31 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
         } else {
-          throw Exception("Gagal membaca konten file (kosong atau format tidak didukung)");
+          throw Exception("Konten file kosong atau tidak dapat dibaca.");
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint("Error picking file: $e");
+      debugPrint("Stack trace: $stackTrace");
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
+            content: Text('Terjadi kesalahan: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
           ),
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -111,7 +128,13 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 40),
               _isLoading
-                  ? const CircularProgressIndicator()
+                  ? const Column(
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text("Membaca file...", style: TextStyle(color: Colors.grey)),
+                      ],
+                    )
                   : ElevatedButton.icon(
                       onPressed: _pickFile,
                       icon: const Icon(Icons.folder_open),
